@@ -50,7 +50,7 @@ The fracture models are trained **separately per age group**, defined as:
 
 ```bash
 # Run full pipeline (split -> train classifier -> train per age group -> grad-cam)
-python run_all_training_0704.py
+python Final_code_FX_0723.py
 ```
 
 Or run individual steps:
