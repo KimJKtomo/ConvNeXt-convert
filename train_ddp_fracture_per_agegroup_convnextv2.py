@@ -77,7 +77,7 @@ class FocalLoss(nn.Module):
         return focal_loss.mean() if self.reduction == "mean" else focal_loss.sum()
 
 # ✅ Age Group별 학습 루프
-for age_group in [0, 1, 2, 3]:
+for age_group in [2, 3]:
     if local_rank == 0:
         print(f"\n🔹 Training Age Group {age_group}")
 
@@ -127,6 +127,8 @@ for age_group in [0, 1, 2, 3]:
             outputs = model(images).squeeze(dim=-1)
             loss = criterion(outputs, targets)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+
             optimizer.step()
 
             total_loss += loss.item()

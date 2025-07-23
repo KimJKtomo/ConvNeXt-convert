@@ -7,7 +7,7 @@ from tqdm import tqdm
 from torchvision import transforms
 from timm import create_model
 from torch.nn import Sigmoid
-from pytorch_grad_cam import GradCAMPlusPlus
+from pytorch_grad_cam import HiResCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 from unified_dataset_0704 import UnifiedDataset
 from torch.utils.data import DataLoader
@@ -15,10 +15,10 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 
 # ✅ 설정
-MODEL_BASE_PATH = "0721_convnextv2_base_fracture_agegroup{}.pt"
-OUTPUT_BASE_DIR = "0721_gradcampp_results_convnextv2"
+MODEL_BASE_PATH = "models/0722_best_ddp_convnextv2_agegroup{}.pt"
+OUTPUT_BASE_DIR = "test_ddp_gradcampp_results_convnextv2"
 os.makedirs(OUTPUT_BASE_DIR, exist_ok=True)
-
+img_dir ="original/"
 # ✅ 이미지 변환
 transform = transforms.Compose([
     transforms.Resize((384, 384)),
@@ -30,44 +30,45 @@ transform = transforms.Compose([
 # ✅ 나이 그룹 라벨 함수
 def AGE_GROUP_FN(age):
     age = float(age)
-    if age < 1.5:
+    if age < 5:
         return 0
-    elif age < 5:
-        return 1
     elif age < 10:
-        return 2
+        return 1
     elif age < 15:
-        return 3
+        return 2
     else:
-        return 4
+        return 3
 
 # ✅ 각 연령대 모델에 대해 GradCAM++ 수행
-for AGE_GROUP in [0, 1, 2, 3, 4]:
+for AGE_GROUP in [0, 1, 2, 3]:
     print(f"\n🔍 GradCAM++ for Age Group {AGE_GROUP}...")
     MODEL_PATH = MODEL_BASE_PATH.format(AGE_GROUP)
     OUTPUT_DIR = os.path.join(OUTPUT_BASE_DIR, f"agegroup{AGE_GROUP}")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    # DEVICE = torch.device('cpu')
     # ✅ 모델 로딩
     model = create_model(
-        "convnextv2_base.fcmae_ft_in22k_in1k_384",
+        "convnextv2_large.fcmae_ft_in22k_in1k_384",
         pretrained=False,
         num_classes=1,
-        drop_rate=0.0,
-        drop_path_rate=0.0
+        drop_rate=0.1,
+        drop_path_rate=0.2
     )
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE, weights_only=True))
     model.to(DEVICE)
     model.eval()
 
     # ✅ CAM 대상 레이어
-    target_layers = [model.stages[-1].blocks[-1]]
+    # target_layers = [model.stages[2].blocks[-1].norm]
+    # print(model.stages[3].blocks[-1])
+    target_layers = [model.stages[-1].blocks[-1].conv_dw]
+
     sigmoid = Sigmoid()
 
     # ✅ 테스트셋 필터링
-    df_test = pd.read_csv("test_set_0704.csv")
+    df_test = pd.read_csv("test_data_0704.csv")
     df_test = df_test[df_test["age"].astype(float).apply(AGE_GROUP_FN) == AGE_GROUP]
     df_test["label"] = df_test["fracture_visible"].apply(lambda x: 1.0 if x == 1 else 0.0)
 
@@ -75,7 +76,7 @@ for AGE_GROUP in [0, 1, 2, 3, 4]:
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
 
     results = []
-    with GradCAMPlusPlus(model=model, target_layers=target_layers) as cam:
+    with HiResCAM(model=model, target_layers=target_layers) as cam:
         for i, (img_tensor, label) in enumerate(tqdm(val_loader)):
             img_tensor = img_tensor.to(DEVICE)
             with torch.no_grad():
@@ -84,7 +85,9 @@ for AGE_GROUP in [0, 1, 2, 3, 4]:
                 pred = int(prob > 0.5)
 
             # ✅ 원본 이미지 로딩
-            img_path = df_test.iloc[i]["image_path"]
+            img_name = df_test.iloc[i]["filestem"]
+            print(img_name)
+            img_path = img_dir+img_name+".png"
             orig = cv2.imread(img_path)
             h, w = orig.shape[:2]
             rgb_img = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB) / 255.0
