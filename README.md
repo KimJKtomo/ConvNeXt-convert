@@ -37,11 +37,10 @@ The fracture models are trained **separately per age group**, defined as:
 
 | Age Group | Age Range (years)  |
 |-----------|---------------------|
-| 0         | 0 ~ 1.5             |
-| 1         | 1.5 ~ 5             |
-| 2         | 5 ~ 10              |
-| 3         | 10 ~ 15             |
-| 4         | 15 ~ 19             |
+| 0         | 0 ~ 5               |
+| 1         | 5 ~ 10              |
+| 2         | 10 ~ 15             |
+| 3         | 15 ~ 19             |
 
 > These age boundaries are customizable in `AGE_GROUP_FN`.
 
